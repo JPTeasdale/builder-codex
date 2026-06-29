@@ -1,0 +1,4 @@
+interface:
+  display_name: "Builder Dev Loop"
+  short_description: "Agentic ticket-to-deploy development loop"
+  default_prompt: "Use $builder-dev-loop to take the next approved development ticket through implementation, checks, review, and deploy gating."

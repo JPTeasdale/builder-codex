@@ -1,0 +1,13 @@
+.DS_Store
+.env
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.agent/
+tmp/
+logs/
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
