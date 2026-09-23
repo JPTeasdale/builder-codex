@@ -1,62 +1,76 @@
-# Builder Dev Loop Workflow
+# Development Workflow
 
-## Goal
+## 1. Intake
 
-Move one bounded software change from ticket intake to a deploy decision with durable artifacts and clear human approval.
+Use the supplied request as the current task. If none was supplied, prefer the Devflow CLI's task-queue capabilities and inspect its current help to select the appropriate operation. Fall back to another configured ticket source only when no matching Devflow task exists.
 
-## Phases
+Normalize the task into `.agent/ticket.json` with an identifier, title, bounded description, repository, relevant labels or links, and independently verifiable acceptance criteria. Queue newly discovered future work through Devflow when possible, but do not re-add the active task when a Codex task resumes.
 
-### 1. Intake
+## 2. Context
 
-Use the supplied ticket/request. If none exists, run `scripts/next_ticket.py`. Normalize the result into `.agent/ticket.json`.
+Read repository instructions and enough surrounding implementation, tests, and configuration to understand the current behavior. Read the development knowledge index and only the notes relevant to the repository or changed area.
 
-Minimum ticket shape:
+Check the worktree before editing. Preserve unrelated changes and distinguish user-owned work from the current task.
 
-```json
-{
-  "id": "ENG-123",
-  "title": "Short title",
-  "body": "Ticket body or request",
-  "repo": "/absolute/path/to/repo",
-  "labels": ["frontend"],
-  "links": []
-}
-```
-
-### 2. Context
-
-Read `knowledge/index.md`, then only the relevant knowledge files. For a UI task, prefer frontend, accessibility, testing, and UX evaluation notes. For backend work, prefer API, data, and reliability notes. For a known repo, read `knowledge/repos/<repo>.md` if present.
-
-### 3. Plan
+## 3. Plan
 
 Write `.agent/plan.md` with:
 
-- ticket summary
-- constraints and assumptions
-- files or modules likely to change
-- deterministic checks to run
-- approval/deploy risk
+- the requested outcome and acceptance criteria;
+- constraints and assumptions;
+- the smallest likely file and module surface;
+- deterministic checks and user-visible verification;
+- migration, deployment, and rollback risk.
 
-### 4. Worktree
+Reject plan steps that are merely cleanup, speculative extensibility, or unrelated refactoring.
 
-Use `scripts/create_worktree.py` when the ticket needs isolated edits. Reuse an existing ticket worktree when one already exists and is clean enough to continue.
+## 4. Isolation
 
-### 5. Implementation
+Use an isolated worktree when the task needs a separate branch or the current checkout contains overlapping work. Reuse an existing clean task worktree when appropriate.
 
-Make the smallest coherent change that satisfies the ticket. Follow repo conventions over generic preferences.
+## 5. Implementation
 
-### 6. Deterministic Checks
+Implement the smallest coherent patch. Follow local conventions before introducing a new pattern. Reuse existing functions and boundaries when they remain clear; avoid wrappers that only rename another call or abstractions with one speculative consumer.
 
-Run `scripts/run_checks.py`. It detects common package managers and runs available checks. When it cannot infer commands, inspect the repo and run the most relevant commands manually.
+When a required local secret is missing, prefer the Devflow CLI's secure handoff capability. Let the CLI explain the correct operation. Never place the secret in a prompt, ticket, artifact, log, or command argument.
 
-### 7. Agentic Evaluation
+## 6. Deterministic checks
 
-For UI work, capture screenshots and inspect the rendered result. For backend or architecture work, run a review pass against the ticket, tests, failure modes, and deployment risk.
+Run focused tests while iterating. Before review, run formatting, linting, type checks, tests, builds, and repository-specific structural checks that apply to the changed surface. Record commands, results, and useful logs in `.agent/checks.json`.
 
-### 8. Approval
+A queued or in-progress remote check is not success. When durable observation is useful, prefer the Devflow CLI and follow its current help, then independently inspect the authoritative result.
 
-Prepare `.agent/final-report.md` and call `scripts/request_telegram_approval.py` for deploy or merge gates when Telegram is configured. Otherwise ask the user in the Codex thread.
+## 7. Code review
 
-### 9. Deploy
+After deterministic checks, run the review gate from `references/code-review.md`.
 
-Run `scripts/deploy.py` only when the approval artifact matches the current ticket and target action.
+Use independent review agents when available:
+
+1. correctness reviewer;
+2. minimality and cleanliness reviewer.
+
+Give reviewers the raw ticket, complete diff, relevant surrounding code, and check results. Do not prime them with intended findings. Fix only evidenced, actionable issues and use the smallest safe patch. Rerun affected checks and re-review the changed areas.
+
+## 8. Preview and evaluation
+
+For user-interface work, inspect the rendered result at representative desktop and mobile sizes and verify accessibility-critical behavior. For backend or architecture work, exercise success, validation, authorization, persistence, restart, and failure paths proportionate to risk.
+
+For a remote preview, verify that the exact deployed revision is reachable and implements the task. Record the preview URL and exact head/base revisions.
+
+## 9. Pull request handoff
+
+Commit and push only the focused task changes, then create or update the pull request. Record `.agent/pull-request.json` with the PR URL, number, branches, exact revisions, current checks, preview, risks, and rollback notes.
+
+Do not call work ready before the required checks and preview are verified. Send the configured plain ready notification with the GitHub PR URL and verified preview URL when available. Telegram is notification-only; the user merges only through GitHub.
+
+## 10. Merge and release observation
+
+After the user merges, prefer Devflow for durable observation of the PR, CI, deployment, and release when supported. Let the CLI's current help select the correct operation. Treat notification as a wake-up signal and inspect the authoritative GitHub and deployment results.
+
+Write `.agent/release.json` only after the exact released revision and target are verified. If a required job or verification fails, keep the current task active and prepare the smallest repair PR rather than bypassing the failure.
+
+## 11. Completion and continuation
+
+Update `.agent/final-report.md` with the outcome, focused diff, checks, review results, pull request, notification, release verification, residual risks, and follow-up work.
+
+Complete the current task only after verified release. Then prefer the Devflow queue for the next task. Never overlap implementation work; planning and reprioritizing future tasks is allowed.

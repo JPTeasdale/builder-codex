@@ -8,6 +8,8 @@
 
 ## Artifacts
 
-## Approval
+## Devflow Receipts
+
+## GitHub Merge Handoff
 
 ## Follow-Up

@@ -1,59 +1,61 @@
 ---
-name: builder-dev-loop
-description: Execute a structured software development workflow from a ticket or requested change through planning, implementation, deterministic checks, agentic quality evaluation, preview artifacts, human approval, and deploy gating. Use when Codex is asked to work a Linear/GitHub/product ticket, run a repeatable ticket-to-deploy loop, coordinate with the builder-codex scripts, consult the builder knowledge vault, or prepare implementation artifacts for approval.
+name: development-flow
+description: Execute a minimal-change software development workflow from ticket intake through implementation, deterministic checks, independent code review, pull-request handoff, and verified release. Use when Codex is asked to implement or review a feature, bug fix, refactor, development ticket, pull request, or release.
 ---
 
-# Builder Dev Loop
+# Development Flow
 
-## Operating Model
+## Operating model
 
-Use Codex for judgment-heavy work and the bundled scripts for repeatable operations.
+- Read `references/workflow.md` before changing code.
+- Read `references/code-review.md` before delegating or performing the review gate.
+- Prefer `~/devflow-tools/bin/devflow-tools` whenever it supports the needed queue, secret, or GitHub observation operation.
+- Inspect the CLI's current help and relevant subcommand help instead of relying on command syntax copied into this skill.
+- Use Codex judgment for planning, implementation, review, and release verification; use deterministic tools for repeatable state transitions and checks.
+- Preserve unrelated user changes and keep ticket artifacts under `.agent/` in the active worktree.
 
-- Read the workflow reference first: `references/workflow.md`.
-- Read the prompt/script contract when using or editing scripts: `references/prompt-contracts.md`.
-- Treat `/Users/jpteasdale/code/builder-codex/knowledge/index.md` as the entry point for development knowledge.
-- Load only the knowledge files relevant to the ticket, repo, labels, or changed area.
-- Write per-ticket artifacts under `.agent/` in the active worktree.
-- Prefer structured JSON script output over prose when handing state between scripts and Codex.
+## Core workflow
 
-## Standard Loop
+1. Establish one bounded current task. When none was supplied, prefer the Devflow task queue before consulting another ticket source.
+2. Read the ticket, repository instructions, relevant knowledge, and surrounding code.
+3. Define acceptance criteria and write the smallest credible implementation plan.
+4. Use an isolated worktree when edits should not share the current checkout.
+5. Implement the smallest coherent change that satisfies the acceptance criteria.
+6. Use Devflow for a required secret handoff instead of asking for or carrying a secret in chat.
+7. Run the narrowest relevant deterministic checks, followed by the repository's required full checks.
+8. Run independent correctness and minimality reviews. Address findings with the smallest safe fix, rerun affected checks, and re-review changed areas.
+9. Verify user-visible behavior and remote previews when relevant.
+10. Commit and push a focused branch, create or update the pull request, and record exact revision and verification artifacts.
+11. Notify the user through the configured channel. Telegram is notification-only; the user merges through GitHub.
+12. Prefer Devflow for durable PR, CI, deployment, and release observation. Independently verify the authoritative terminal result.
+13. Keep failures in the current task, prepare the smallest repair, and repeat the review and handoff gates.
+14. Mark the task complete only after release verification, then select the next queued task without overlapping implementations.
 
-1. Establish the ticket or requested change.
-2. Run `scripts/next_ticket.py` if the user did not provide a ticket.
-3. Read `.agent/ticket.json` when present.
-4. Read the knowledge vault index and any relevant files it routes to.
-5. Create or confirm a focused plan in `.agent/plan.md`.
-6. Run `scripts/create_worktree.py` when a new worktree is needed.
-7. Implement the change in the worktree using existing repo conventions.
-8. Run deterministic checks with `scripts/run_checks.py`.
-9. Start or record preview details with `scripts/start_preview.py` when the change has a UI.
-10. Collect artifacts with `scripts/collect_artifacts.py`.
-11. If deployment or irreversible action is requested, run `scripts/request_telegram_approval.py` or ask the user directly.
-12. Deploy only after explicit approval, then write `.agent/final-report.md`.
+## Change discipline
 
-## Approval Rules
+- Change only what the acceptance criteria require.
+- Prefer existing repository patterns and dependencies over new abstractions, wrappers, helpers, or configuration.
+- Add an abstraction only when it removes demonstrated duplication or enforces a necessary boundary in the current change.
+- Avoid opportunistic cleanup, broad renames, formatting churn, generated-file edits without their generator, and unrelated dependency updates.
+- Keep APIs and persisted state backward compatible unless the task explicitly requires a break and the user authorizes the migration.
+- Tests should prove the requested behavior and important failure modes without overspecifying implementation details.
 
-- Never deploy, merge, delete production data, or run destructive operations without explicit approval.
-- Telegram approval is acceptable only when the approval script returns `approved: true` for the current ticket and action.
-- If Telegram is not configured, stop at the approval gate and report the preview/check artifacts.
-- Treat any ambiguous approval, stale approval, or mismatched ticket id as rejected.
+## Review gate
 
-## Knowledge Vault
+- When review agents are available, give them the raw ticket, complete diff, relevant surrounding code, and check results—not the intended answer or suspected defects.
+- Run a defect-first correctness review and a separate minimality/cleanliness review as described in `references/code-review.md`.
+- Require findings to be specific, evidenced, introduced by the change, and worth fixing. Ignore speculative concerns and style preferences.
+- Do not proceed to pull-request handoff with unresolved correctness, security, data-loss, or release-blocking findings.
 
-The source-controlled knowledge vault is outside the skill so it can be edited in Obsidian:
+## Safety and authority
 
-`/Users/jpteasdale/code/builder-codex/knowledge`
+- Never merge on the user's behalf. The user merges through their authorized GitHub account.
+- Telegram messages never authorize a merge or deployment and contain no approval controls.
+- Never expose secrets in prompts, task artifacts, logs, command arguments, or notifications.
+- Treat asynchronous watch registration as observation setup, not proof of success.
+- Require explicit authorization for destructive actions or deployments not already authorized by the repository's normal merge-triggered release path.
+- Do not overlap implementations; planning or reprioritizing future work is allowed.
 
-Start with `knowledge/index.md`. Follow its links to repo-specific, product, frontend, backend, testing, and evaluation guidance. Do not ingest the whole vault by default.
+## Knowledge
 
-## Script Contract
-
-All scripts should:
-
-- Accept `--worktree` when they operate on code.
-- Accept `--ticket` or `--ticket-file` when ticket context matters.
-- Print a single JSON object to stdout.
-- Write durable artifacts under `.agent/`.
-- Return non-zero only for infrastructure/script failure. Product checks can fail while still returning JSON with `status: "failed"`.
-
-See `references/prompt-contracts.md` for canonical JSON shapes.
+Start with `/Users/jpteasdale/code/builder-codex/knowledge/index.md`, then load only the notes relevant to the repository and changed area. Prefer current repository behavior over stale knowledge notes.

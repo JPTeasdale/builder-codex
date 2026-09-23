@@ -7,3 +7,6 @@
 - Separate deterministic checks from agentic judgment.
 - Record assumptions in `.agent/plan.md` when the ticket is ambiguous.
 - Stop at approval gates for deploys, migrations, destructive actions, and irreversible external effects.
+### Project Setup
+- Always use cli tools to generate configs and instal dependencies. 
+- Always use cli too

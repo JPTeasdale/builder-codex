@@ -1,0 +1,229 @@
+{
+  "main": {
+    "id": "bc0df75073e761ba",
+    "type": "split",
+    "children": [
+      {
+        "id": "6c3bd9e5392c2f75",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "b9e2a88f99d35def",
+            "type": "leaf",
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "stacks/edge-service-stack/api.md",
+                "mode": "source",
+                "source": false
+              },
+              "icon": "lucide-file",
+              "title": "api"
+            }
+          },
+          {
+            "id": "e7d3686104b365d2",
+            "type": "leaf",
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "developer-docs.md",
+                "mode": "source",
+                "source": false
+              },
+              "icon": "lucide-file",
+              "title": "developer-docs"
+            }
+          }
+        ],
+        "currentTab": 1
+      }
+    ],
+    "direction": "vertical"
+  },
+  "left": {
+    "id": "be51d19fc6c4cfb9",
+    "type": "split",
+    "children": [
+      {
+        "id": "96d5fc00caac4767",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "ce10a9f4dd350dd4",
+            "type": "leaf",
+            "state": {
+              "type": "file-explorer",
+              "state": {
+                "sortOrder": "alphabetical",
+                "autoReveal": false,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-folder-closed",
+              "title": "Files"
+            }
+          },
+          {
+            "id": "1d3b7a93cfff52e1",
+            "type": "leaf",
+            "state": {
+              "type": "search",
+              "state": {
+                "query": "",
+                "matchingCase": false,
+                "explainSearch": false,
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical"
+              },
+              "icon": "lucide-search",
+              "title": "Search"
+            }
+          },
+          {
+            "id": "0ee43d2c8ca173ee",
+            "type": "leaf",
+            "state": {
+              "type": "bookmarks",
+              "state": {},
+              "icon": "lucide-bookmark",
+              "title": "Bookmarks"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300
+  },
+  "right": {
+    "id": "88e4210119c83002",
+    "type": "split",
+    "children": [
+      {
+        "id": "0fd6163e7ec52b7f",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "27553068de47e083",
+            "type": "leaf",
+            "state": {
+              "type": "backlink",
+              "state": {
+                "file": "stacks/edge-service-stack/api.md",
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical",
+                "showSearch": false,
+                "searchQuery": "",
+                "backlinkCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-coming-in",
+              "title": "Backlinks for api"
+            }
+          },
+          {
+            "id": "b2058f1a073655b1",
+            "type": "leaf",
+            "state": {
+              "type": "outgoing-link",
+              "state": {
+                "file": "stacks/edge-service-stack/api.md",
+                "linksCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-going-out",
+              "title": "Outgoing links from api"
+            }
+          },
+          {
+            "id": "cb385035b263cbfa",
+            "type": "leaf",
+            "state": {
+              "type": "tag",
+              "state": {
+                "sortOrder": "frequency",
+                "useHierarchy": true,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-tags",
+              "title": "Tags"
+            }
+          },
+          {
+            "id": "68b6521c630a8be1",
+            "type": "leaf",
+            "state": {
+              "type": "all-properties",
+              "state": {
+                "sortOrder": "frequency",
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-archive",
+              "title": "All properties"
+            }
+          },
+          {
+            "id": "0870dd3cc739d83f",
+            "type": "leaf",
+            "state": {
+              "type": "outline",
+              "state": {
+                "file": "stacks/edge-service-stack/api.md",
+                "followCursor": false,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-list",
+              "title": "Outline of api"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300,
+    "collapsed": true
+  },
+  "left-ribbon": {
+    "hiddenItems": {
+      "switcher:Open quick switcher": false,
+      "graph:Open graph view": false,
+      "canvas:Create new canvas": false,
+      "daily-notes:Open today's daily note": false,
+      "templates:Insert template": false,
+      "command-palette:Open command palette": false,
+      "bases:Create new base": false
+    }
+  },
+  "active": "ce10a9f4dd350dd4",
+  "lastOpenFiles": [
+    "index.md",
+    "engineering-principles.md",
+    "stacks/edge-service-stack/lifecycle.md",
+    "stacks/edge-service-stack/review-gates.md",
+    "stacks/edge-service-stack/directory-structure.md",
+    "stacks/edge-service-stack/deployment.md",
+    "stacks/edge-service-stack/database.md",
+    "stacks/edge-service-stack/auth.md",
+    "stacks/edge-service-stack/api.md",
+    "stacks/edge-service-stack/ultralint.md",
+    "stacks/edge-service-stack/ui.md",
+    "stacks/edge-service-stack/source-map.md",
+    "stacks/edge-service-stack/secrets.md",
+    "stacks/edge-service-stack/scaffold.md",
+    "stacks/edge-service-stack/operations.md",
+    "stacks/edge-service-stack/index.md",
+    "stacks/edge-service-stack",
+    "stacks",
+    "developer-docs.md",
+    "evals/code-review-rubric.md",
+    "services/cloudflare-developer-documentation.md",
+    "services",
+    "backend/api-patterns.md"
+  ]
+}

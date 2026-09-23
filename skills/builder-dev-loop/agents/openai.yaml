@@ -1,4 +1,4 @@
 interface:
-  display_name: "Builder Dev Loop"
-  short_description: "Agentic ticket-to-deploy development loop"
-  default_prompt: "Use $builder-dev-loop to take the next approved development ticket through implementation, checks, review, and deploy gating."
+  display_name: "Development Flow"
+  short_description: "Minimal, reviewed ticket-to-release workflow"
+  default_prompt: "Use $development-flow to implement the requested change with the Devflow CLI whenever possible, focused checks, and independent correctness and minimality reviews."

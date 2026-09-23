@@ -1,5 +1,6 @@
 # Frontend Design System Notes
 
+- For Edge Service Stack UI work, start with [[stacks/edge-service-stack/ui]].
 - Use existing components, tokens, icons, and spacing before adding new primitives.
 - Prefer compact, task-focused surfaces for operational apps.
 - Verify responsive states at mobile and desktop widths.

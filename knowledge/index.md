@@ -5,6 +5,7 @@ This vault is the editable source of truth for Builder Codex. Open this folder i
 ## Start Here
 
 - [[engineering-principles]]
+- [[developer-docs]]
 - [[evals/code-review-rubric]]
 - [[evals/ux-quality-rubric]]
 
@@ -18,6 +19,10 @@ This vault is the editable source of truth for Builder Codex. Open this folder i
 
 - [[backend/api-patterns]]
 - [[backend/database]]
+
+## Stacks
+
+- [[stacks/edge-service-stack/index]]
 
 ## Product
 
@@ -34,6 +39,7 @@ When working a ticket:
 
 1. Read this index.
 2. Read the repo note when it exists.
-3. Read only the product/frontend/backend/eval notes relevant to the ticket.
-4. Prefer current repository files over stale knowledge notes when they conflict.
-5. Update knowledge notes after repeated lessons, not after one-off quirks.
+3. If the repo uses the Edge Service Stack, read [[stacks/edge-service-stack/index]] and the relevant stack notes.
+4. Read only the product/frontend/backend/eval notes relevant to the ticket.
+5. Prefer current repository files over stale knowledge notes when they conflict.
+6. Update knowledge notes after repeated lessons, not after one-off quirks.

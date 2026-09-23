@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shutil
 import subprocess
 import sys
 from datetime import datetime, timezone
@@ -13,6 +14,13 @@ from typing import Any
 REPO_ROOT = Path(__file__).resolve().parents[2]
 PROMPT_PATH = REPO_ROOT / "orchestrator" / "prompts" / "implement-ticket.md"
 KNOWLEDGE_ROOT = REPO_ROOT / "knowledge"
+
+
+def _executable_available(value: str) -> bool:
+    expanded = Path(value).expanduser()
+    if expanded.parent != Path("."):
+        return expanded.is_file() and os.access(expanded, os.X_OK)
+    return shutil.which(value) is not None
 
 
 def _write_json(path: Path, data: dict[str, Any]) -> None:
@@ -64,16 +72,16 @@ def cmd_run(args: argparse.Namespace) -> int:
 
 
 def cmd_doctor(args: argparse.Namespace) -> int:
+    codex_bin = os.environ.get("CODEX_BIN", "codex")
+    devflow_bin = os.environ.get(
+        "DEVFLOW_TOOLS_BIN", str(Path.home() / "devflow-tools" / "bin" / "devflow-tools")
+    )
     checks = {
         "repo_root": str(REPO_ROOT),
         "prompt_exists": PROMPT_PATH.exists(),
         "knowledge_index_exists": (KNOWLEDGE_ROOT / "index.md").exists(),
-        "codex_available": subprocess.run(
-            ["which", os.environ.get("CODEX_BIN", "codex")],
-            capture_output=True,
-            text=True,
-        ).returncode
-        == 0,
+        "codex_available": _executable_available(codex_bin),
+        "devflow_tools_available": _executable_available(devflow_bin),
     }
     print(json.dumps(checks, indent=2))
     return 0 if all(checks.values()) else 1
