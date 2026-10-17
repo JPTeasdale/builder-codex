@@ -1,3 +1,5 @@
+use std::collections::BTreeSet;
+
 use crate::config::Config;
 use crate::fs::Project;
 use crate::rules::{Report, Rule};
@@ -31,10 +33,39 @@ impl Rule for TypeContractsRule {
                 continue;
             }
             let frontend = is_frontend_file(&file.rel_path, config);
+            let inline_type_imports = file
+                .ts
+                .as_ref()
+                .map(|analysis| analysis.inline_type_imports.as_slice())
+                .unwrap_or_default();
+            let inline_type_specifier_lines = inline_type_imports
+                .iter()
+                .flat_map(|import| import.specifier_lines.iter().copied())
+                .collect::<BTreeSet<_>>();
+
+            if frontend {
+                for import in inline_type_imports {
+                    let specifiers = import.specifiers.join(", ");
+                    report.error(
+                        self.id(),
+                        &file.rel_path,
+                        Some(import.line),
+                        format!(
+                            "inline type imports should use a separate `import type` statement: {specifiers}"
+                        ),
+                        format!(
+                            "split imported types into a separate line: `import type {{ {specifiers} }} from \"{}\";`; keep runtime values in their own `import {{ ... }} from \"{}\";` statement",
+                            import.source, import.source
+                        ),
+                    );
+                }
+            }
 
             for (index, line) in file.text.lines().enumerate() {
                 let line_number = index + 1;
-                if let Some(decl) = parse_type_declaration(line, &file.rel_path, line_number) {
+                if !inline_type_specifier_lines.contains(&line_number)
+                    && let Some(decl) = parse_type_declaration(line, &file.rel_path, line_number)
+                {
                     if frontend
                         && !is_presentational_type(&decl.name)
                         && !config.allowed_type_names.contains(&decl.name)

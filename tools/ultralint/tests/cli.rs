@@ -149,7 +149,17 @@ fn write_minimal_project(root: &Path) {
     write_file(
         root,
         "src/components/ui/button.tsx",
-        "export function Button() { return null; }",
+        "export function Button() { return <button type='button' />; }",
+    );
+    write_file(
+        root,
+        "src/components/ui/select.tsx",
+        "export function Select() { return <select />; }",
+    );
+    write_file(
+        root,
+        "src/components/ui/form.tsx",
+        "interface FormProps { children?: unknown }\nexport function Form({ children }: FormProps) { return children; }\nexport function FormRoot({ children }: FormProps) { return <form>{children}</form>; }",
     );
     write_file(
         root,
@@ -1638,8 +1648,13 @@ fn storybook_can_import_page_entrypoint() {
     write_minimal_project(&root);
     write_file(
         &root,
+        "src/components/pages/home-page/status-panel.tsx",
+        "export function StatusPanel() { return null; }",
+    );
+    write_file(
+        &root,
         "src/components/pages/home-page/home-page.stories.tsx",
-        "import HomePage from '~/components/pages/home-page';\nexport default { component: HomePage };",
+        "import HomePage from '~/components/pages/home-page';\nimport { StatusPanel } from '~/components/pages/home-page/status-panel';\nexport default { component: HomePage };\nexport const Status = StatusPanel;",
     );
 
     let output = Command::new(ultralint_bin())
@@ -1650,6 +1665,34 @@ fn storybook_can_import_page_entrypoint() {
     assert!(
         output.status.success(),
         "expected pass\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+#[test]
+fn component_tests_can_import_page_entrypoints_and_internals() {
+    let root = temp_project("pass-component-test-page-imports");
+    write_minimal_project(&root);
+    write_file(
+        &root,
+        "src/components/pages/home-page/status-panel.tsx",
+        "export function StatusPanel() { return null; }",
+    );
+    write_file(
+        &root,
+        "tests/admin-review.test.tsx",
+        "import HomePage from '~/components/pages/home-page';\nimport { StatusPanel } from '~/components/pages/home-page/status-panel';\nimport { expect, it } from 'vitest';\nit('can exercise a page and its private support components', () => { expect(HomePage).toBeDefined(); expect(StatusPanel).toBeDefined(); });",
+    );
+
+    let output = Command::new(ultralint_bin())
+        .arg(&root)
+        .output()
+        .expect("run ultralint");
+
+    assert!(
+        output.status.success(),
+        "expected component test imports to pass\nstdout:\n{}\nstderr:\n{}",
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr)
     );
@@ -1940,6 +1983,88 @@ fn components_forms_directory_fails() {
     assert!(
         stdout.contains("src/components/forms is not an allowed component boundary"),
         "expected forms boundary guidance, got:\n{stdout}"
+    );
+}
+
+#[test]
+fn native_interactive_elements_outside_ui_fail_with_shadcn_guidance() {
+    let root = temp_project("fail-native-interactive-elements");
+    write_minimal_project(&root);
+    write_file(
+        &root,
+        "src/components/pages/home-page/index.tsx",
+        "export default function HomePage() { return <form><select /><button type='submit'>Save</button></form>; }",
+    );
+
+    let output = Command::new(ultralint_bin())
+        .arg(&root)
+        .arg("--json")
+        .output()
+        .expect("run ultralint");
+
+    assert!(!output.status.success(), "expected ultralint to fail");
+    let report: serde_json::Value =
+        serde_json::from_slice(&output.stdout).expect("report should be JSON");
+    let issues = report["issues"]
+        .as_array()
+        .expect("issues should be an array");
+    let findings = issues
+        .iter()
+        .filter(|issue| issue["ruleId"] == "shadcn-ui-primitives")
+        .collect::<Vec<_>>();
+
+    assert_eq!(findings.len(), 3, "expected one finding per native element");
+    for (element, component, module) in [
+        ("select", "Select", "select.tsx"),
+        ("button", "Button", "button.tsx"),
+    ] {
+        assert!(
+            findings.iter().any(|issue| {
+                issue["message"]
+                    .as_str()
+                    .is_some_and(|message| message.contains(&format!("`<{element}>`")))
+                    && issue["help"].as_str().is_some_and(|help| {
+                        help.contains(&format!("shadcn `{component}`")) && help.contains(module)
+                    })
+            }),
+            "expected shadcn guidance for <{element}>"
+        );
+    }
+    assert!(
+        findings.iter().any(|issue| {
+            issue["message"]
+                .as_str()
+                .is_some_and(|message| message.contains("`<form>`"))
+                && issue["help"].as_str().is_some_and(|help| {
+                    help.contains("shadcn form components")
+                        && help.contains("FormRoot")
+                        && help.contains("src/components/ui/form.tsx")
+                })
+        }),
+        "expected semantic shadcn form wrapper guidance"
+    );
+}
+
+#[test]
+fn shadcn_components_outside_ui_are_allowed() {
+    let root = temp_project("pass-shadcn-components");
+    write_minimal_project(&root);
+    write_file(
+        &root,
+        "src/components/pages/home-page/index.tsx",
+        "import { Button } from '~/components/ui/button';\nimport { Form, FormRoot } from '~/components/ui/form';\nimport { Select } from '~/components/ui/select';\nexport default function HomePage() { return <Form><FormRoot><Select /><Button>Save</Button></FormRoot></Form>; }",
+    );
+
+    let output = Command::new(ultralint_bin())
+        .arg(&root)
+        .output()
+        .expect("run ultralint");
+
+    assert!(
+        output.status.success(),
+        "expected shadcn component usage to pass\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
     );
 }
 
@@ -2866,6 +2991,84 @@ fn frontend_local_api_contract_type_fails() {
 }
 
 #[test]
+fn frontend_inline_type_imports_recommend_a_separate_import_type_statement() {
+    let root = temp_project("fail-inline-type-import");
+    write_minimal_project(&root);
+    write_file(
+        &root,
+        "src/lib/application/application.schema.ts",
+        "export type Credential = 'RN';\nexport type Location = { id: string };\nexport const credentialLabels = { RN: 'Registered nurse' };",
+    );
+    write_file(
+        &root,
+        "src/components/pages/home-page/index.tsx",
+        r#"import {
+  type Credential,
+  credentialLabels,
+  type Location,
+} from "~/lib/application/application.schema";
+
+export default function HomePage() {
+  return credentialLabels satisfies Record<Credential, string> as unknown as Location;
+}"#,
+    );
+
+    let output = Command::new(ultralint_bin())
+        .arg(&root)
+        .output()
+        .expect("run ultralint");
+
+    assert!(!output.status.success(), "expected ultralint to fail");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("type-contracts")
+            && stdout.contains("inline type imports should use a separate `import type` statement")
+            && stdout.contains(
+                "import type { Credential, Location } from \"~/lib/application/application.schema\";"
+            ),
+        "expected separate import type guidance, got:\n{stdout}"
+    );
+    assert!(
+        !stdout.contains("type `Credential` is declared in frontend code")
+            && !stdout.contains("type `Location` is declared in frontend code"),
+        "imported types must not be reported as local declarations:\n{stdout}"
+    );
+}
+
+#[test]
+fn frontend_separate_import_type_statement_passes() {
+    let root = temp_project("pass-separate-type-import");
+    write_minimal_project(&root);
+    write_file(
+        &root,
+        "src/lib/application/application.schema.ts",
+        "export type Credential = 'RN';\nexport type Location = { id: string };\nexport const credentialLabels = { RN: 'Registered nurse' };",
+    );
+    write_file(
+        &root,
+        "src/components/pages/home-page/index.tsx",
+        r#"import type { Credential, Location } from "~/lib/application/application.schema";
+import { credentialLabels } from "~/lib/application/application.schema";
+
+export default function HomePage() {
+  return credentialLabels satisfies Record<Credential, string> as unknown as Location;
+}"#,
+    );
+
+    let output = Command::new(ultralint_bin())
+        .arg(&root)
+        .output()
+        .expect("run ultralint");
+
+    assert!(
+        output.status.success(),
+        "expected separate import type statement to pass\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+#[test]
 fn runtime_secret_in_mobile_source_fails() {
     let root = temp_project("fail-secret");
     write_file(
@@ -3127,6 +3330,10 @@ fn version_and_rule_catalog_expose_policy_metadata() {
     assert!(rules.iter().any(|rule| {
         rule.get("id").and_then(serde_json::Value::as_str) == Some("source-integrity")
             && rule.get("category").and_then(serde_json::Value::as_str) == Some("quality")
+    }));
+    assert!(rules.iter().any(|rule| {
+        rule.get("id").and_then(serde_json::Value::as_str) == Some("shadcn-ui-primitives")
+            && rule.get("category").and_then(serde_json::Value::as_str) == Some("react")
     }));
 }
 
@@ -3697,6 +3904,162 @@ fn unfiltered_drizzle_mutations_are_warnings() {
         stdout.contains("drizzle-mutation-safety") && stdout.contains("without `.where(...)`"),
         "expected unfiltered mutation guidance, got:\n{stdout}"
     );
+}
+
+#[test]
+fn nested_where_does_not_filter_drizzle_mutation() {
+    let root = temp_project("nested-where-unfiltered-mutation");
+    write_minimal_project(&root);
+    write_file(
+        &root,
+        "src/server/db/repositories/users.repository.ts",
+        "import { eq } from 'drizzle-orm';\nimport type { RoleTransaction } from '../roles';\nimport { user } from '../schema/auth';\nexport async function updateUsers(tx: RoleTransaction, query: { where(value: unknown): unknown }, id: number) {\n  await tx.update(user).set({ active: query.where(eq(user.id, id)) });\n}",
+    );
+
+    let output = Command::new(ultralint_bin())
+        .arg(&root)
+        .arg("--deny-warnings")
+        .output()
+        .expect("run ultralint");
+
+    assert_eq!(output.status.code(), Some(1));
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("complete Drizzle update chain executes without `.where(...)`"),
+        "expected the unfiltered update to warn:\n{stdout}"
+    );
+}
+
+#[test]
+fn filtered_drizzle_mutation_chain_is_not_a_warning() {
+    let root = temp_project("filtered-mutation");
+    write_minimal_project(&root);
+    write_file(
+        &root,
+        "src/server/db/repositories/users.repository.ts",
+        "import { eq } from 'drizzle-orm';\nimport type { RoleTransaction } from '../roles';\nimport { user } from '../schema/auth';\nexport async function updateUser(tx: RoleTransaction, id: number, active: boolean) {\n  const [row] = await tx\n    .update(user)\n    .set({ active })\n    .where(eq(user.id, id))\n    .returning();\n  return row;\n}",
+    );
+
+    let output = Command::new(ultralint_bin())
+        .arg(&root)
+        .arg("--deny-warnings")
+        .output()
+        .expect("run ultralint");
+
+    assert!(
+        output.status.success(),
+        "filtered mutation must not warn\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+#[test]
+fn parenthesized_filtered_drizzle_mutation_chain_is_not_a_warning() {
+    let root = temp_project("parenthesized-filtered-mutation");
+    write_minimal_project(&root);
+    write_file(
+        &root,
+        "src/server/db/repositories/users.repository.ts",
+        "import { eq } from 'drizzle-orm';\nimport type { RoleTransaction } from '../roles';\nimport { user } from '../schema/auth';\nexport async function updateUser(tx: RoleTransaction, id: number, active: boolean) {\n  return (tx.update(user).set({ active }))\n    .where(eq(user.id, id))\n    .returning();\n}",
+    );
+
+    let output = Command::new(ultralint_bin())
+        .arg(&root)
+        .arg("--deny-warnings")
+        .output()
+        .expect("run ultralint");
+
+    assert!(
+        output.status.success(),
+        "parenthesized filtered mutation must not warn\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+#[test]
+fn commented_parenthesized_drizzle_mutation_chain_is_not_a_warning() {
+    let root = temp_project("commented-parenthesized-filtered-mutation");
+    write_minimal_project(&root);
+    write_file(
+        &root,
+        "src/server/db/repositories/users.repository.ts",
+        "import { eq } from 'drizzle-orm';\nimport type { RoleTransaction } from '../roles';\nimport { user } from '../schema/auth';\nexport async function updateUser(tx: RoleTransaction, id: number, active: boolean) {\n  return (/* keep this chain readable */ tx.update(user).set({ active }))\n    .where(eq(user.id, id))\n    .returning();\n}",
+    );
+
+    let output = Command::new(ultralint_bin())
+        .arg(&root)
+        .arg("--deny-warnings")
+        .output()
+        .expect("run ultralint");
+
+    assert!(
+        output.status.success(),
+        "commented parenthesized mutation must not warn\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+#[test]
+fn nested_independent_drizzle_mutation_still_warns() {
+    let root = temp_project("nested-independent-mutation");
+    write_minimal_project(&root);
+    write_file(
+        &root,
+        "src/server/db/repositories/users.repository.ts",
+        "import { eq } from 'drizzle-orm';\nimport type { RoleTransaction } from '../roles';\nimport { auditLog, user } from '../schema/auth';\nexport async function updateUser(tx: RoleTransaction, id: number, active: boolean) {\n  return tx\n    .update(user)\n    .set({ active })\n    .where(eq(user.id, id))\n    .returning()\n    .then(() => tx.update(auditLog).set({ active }).returning());\n}",
+    );
+
+    let output = Command::new(ultralint_bin())
+        .arg(&root)
+        .arg("--json")
+        .arg("--deny-warnings")
+        .output()
+        .expect("run ultralint");
+
+    assert!(!output.status.success(), "expected ultralint to fail");
+    let report: serde_json::Value =
+        serde_json::from_slice(&output.stdout).expect("report should be JSON");
+    let findings = report["issues"]
+        .as_array()
+        .expect("issues should be an array")
+        .iter()
+        .filter(|issue| issue["ruleId"] == "drizzle-mutation-safety")
+        .collect::<Vec<_>>();
+    assert_eq!(findings.len(), 1, "expected the nested update to warn");
+    assert_eq!(findings[0]["line"], 10);
+}
+
+#[test]
+fn sequence_receiver_does_not_hide_independent_drizzle_mutation() {
+    let root = temp_project("sequence-receiver-independent-mutation");
+    write_minimal_project(&root);
+    write_file(
+        &root,
+        "src/server/db/repositories/users.repository.ts",
+        "import { eq } from 'drizzle-orm';\nimport type { RoleTransaction } from '../roles';\nimport { auditLog, user } from '../schema/auth';\nexport async function updateUser(tx: RoleTransaction, id: number, active: boolean) {\n  return (\n    tx.update(auditLog).set({ active }).execute(),\n    tx\n  )\n    .update(user)\n    .set({ active })\n    .where(eq(user.id, id))\n    .returning();\n}",
+    );
+
+    let output = Command::new(ultralint_bin())
+        .arg(&root)
+        .arg("--json")
+        .arg("--deny-warnings")
+        .output()
+        .expect("run ultralint");
+
+    assert!(!output.status.success(), "expected ultralint to fail");
+    let report: serde_json::Value =
+        serde_json::from_slice(&output.stdout).expect("report should be JSON");
+    let findings = report["issues"]
+        .as_array()
+        .expect("issues should be an array")
+        .iter()
+        .filter(|issue| issue["ruleId"] == "drizzle-mutation-safety")
+        .collect::<Vec<_>>();
+    assert_eq!(findings.len(), 1, "expected the sequence update to warn");
+    assert_eq!(findings[0]["line"], 6);
 }
 
 #[test]

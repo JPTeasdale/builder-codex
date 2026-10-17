@@ -311,25 +311,80 @@ fn drizzle_mutations_without_where(file: &ProjectFile) -> Vec<MutationViolation>
     let Some(analysis) = &file.ts else {
         return Vec::new();
     };
+    let mutation_calls = analysis
+        .calls
+        .iter()
+        .filter_map(|call| mutation_operation(call).map(|operation| (call, operation)))
+        .collect::<Vec<_>>();
     let mut violations = BTreeSet::new();
-    for call in &analysis.calls {
-        let text = &call.text;
-        let operation = if text.contains(".update(") && text.contains(".set(") {
-            "update"
-        } else if text.contains(".delete(") {
-            "delete"
-        } else {
-            continue;
-        };
-        if text.contains(".where(") || !mutation_is_complete(&file.text, call) {
+    for (call, operation) in &mutation_calls {
+        if mutation_calls.iter().any(|(outer, outer_operation)| {
+            outer_operation == operation && call_is_chain_prefix(call, outer, &analysis.calls)
+        }) {
             continue;
         }
-        violations.insert((call.line, operation));
+        if call_chain_invokes_method(call, &analysis.calls, "where")
+            || !mutation_is_complete(&file.text, call)
+        {
+            continue;
+        }
+        violations.insert((call.line, *operation));
     }
     violations
         .into_iter()
         .map(|(line, operation)| MutationViolation { line, operation })
         .collect()
+}
+
+fn mutation_operation(call: &CallFact) -> Option<&'static str> {
+    if call.callee.contains(".update(")
+        && (call.callee.ends_with(".set") || call.callee.contains(".set("))
+    {
+        return Some("update");
+    }
+    if call.callee.ends_with(".delete") || call.callee.contains(".delete(") {
+        return Some("delete");
+    }
+    None
+}
+
+fn call_is_chain_prefix(inner: &CallFact, outer: &CallFact, calls: &[CallFact]) -> bool {
+    let target = (inner.start, inner.end);
+    let mut receiver = outer.receiver;
+    for _ in 0..calls.len() {
+        let Some(receiver_span) = receiver else {
+            break;
+        };
+        if receiver_span == target {
+            return true;
+        }
+        receiver = calls
+            .iter()
+            .find(|call| (call.start, call.end) == receiver_span)
+            .and_then(|call| call.receiver);
+    }
+    false
+}
+
+fn call_chain_invokes_method(call: &CallFact, calls: &[CallFact], method: &str) -> bool {
+    let suffix = format!(".{method}");
+    let mut current = Some((call.start, call.end));
+    for _ in 0..=calls.len() {
+        let Some(current_span) = current else {
+            break;
+        };
+        let Some(current_call) = calls
+            .iter()
+            .find(|call| (call.start, call.end) == current_span)
+        else {
+            break;
+        };
+        if current_call.callee.trim_end().ends_with(&suffix) {
+            return true;
+        }
+        current = current_call.receiver;
+    }
+    false
 }
 
 fn mutation_is_complete(source: &str, call: &CallFact) -> bool {

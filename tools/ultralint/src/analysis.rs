@@ -1,7 +1,8 @@
 use oxc_allocator::Allocator;
 use oxc_ast::ast::{
-    Argument, CallExpression, ExportAllDeclaration, ExportNamedDeclaration, ImportDeclaration,
-    ImportDeclarationSpecifier, ImportExpression, ImportOrExportKind, StringLiteral,
+    Argument, CallExpression, ChainElement, ExportAllDeclaration, ExportNamedDeclaration,
+    Expression, ImportDeclaration, ImportDeclarationSpecifier, ImportExpression,
+    ImportOrExportKind, JSXOpeningElement, StringLiteral,
 };
 use oxc_ast_visit::{Visit, walk};
 use oxc_parser::Parser;
@@ -25,11 +26,22 @@ pub struct ImportFact {
 }
 
 #[derive(Debug, Clone)]
+pub struct InlineTypeImportFact {
+    pub source: String,
+    pub specifiers: Vec<String>,
+    pub line: usize,
+    pub specifier_lines: Vec<usize>,
+}
+
+#[derive(Debug, Clone)]
 pub struct CallFact {
     pub callee: String,
     pub arguments: Vec<String>,
     pub text: String,
     pub line: usize,
+    pub start: u32,
+    pub end: u32,
+    pub receiver: Option<(u32, u32)>,
 }
 
 #[derive(Debug, Clone)]
@@ -38,11 +50,19 @@ pub struct StringFact {
     pub line: usize,
 }
 
+#[derive(Debug, Clone)]
+pub struct JsxElementFact {
+    pub name: String,
+    pub line: usize,
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct TsAnalysis {
     pub imports: Vec<ImportFact>,
+    pub inline_type_imports: Vec<InlineTypeImportFact>,
     pub calls: Vec<CallFact>,
     pub strings: Vec<StringFact>,
+    pub jsx_elements: Vec<JsxElementFact>,
     pub parse_errors: Vec<String>,
 }
 
@@ -68,6 +88,11 @@ pub fn analyze_typescript(rel_path: &str, source: &str) -> TsAnalysis {
             .cmp(&right.line)
             .then_with(|| left.source.cmp(&right.source))
     });
+    analysis.inline_type_imports.sort_by(|left, right| {
+        left.line
+            .cmp(&right.line)
+            .then_with(|| left.source.cmp(&right.source))
+    });
     analysis.calls.sort_by(|left, right| {
         left.line
             .cmp(&right.line)
@@ -77,6 +102,11 @@ pub fn analyze_typescript(rel_path: &str, source: &str) -> TsAnalysis {
         left.line
             .cmp(&right.line)
             .then_with(|| left.value.cmp(&right.value))
+    });
+    analysis.jsx_elements.sort_by(|left, right| {
+        left.line
+            .cmp(&right.line)
+            .then_with(|| left.name.cmp(&right.name))
     });
     analysis
 }
@@ -136,6 +166,16 @@ impl<'source, 'analysis> FactVisitor<'source, 'analysis> {
 }
 
 impl<'a> Visit<'a> for FactVisitor<'_, '_> {
+    fn visit_jsx_opening_element(&mut self, element: &JSXOpeningElement<'a>) {
+        if let Some(name) = element.name.get_identifier_name() {
+            self.analysis.jsx_elements.push(JsxElementFact {
+                name: name.to_string(),
+                line: self.line(element.span.start),
+            });
+        }
+        walk::walk_jsx_opening_element(self, element);
+    }
+
     fn visit_string_literal(&mut self, literal: &StringLiteral<'a>) {
         self.analysis.strings.push(StringFact {
             value: literal.value.to_string(),
@@ -144,6 +184,38 @@ impl<'a> Visit<'a> for FactVisitor<'_, '_> {
     }
 
     fn visit_import_declaration(&mut self, declaration: &ImportDeclaration<'a>) {
+        if declaration.import_kind != ImportOrExportKind::Type {
+            let mut specifiers = Vec::new();
+            let mut specifier_lines = Vec::new();
+            for specifier in declaration.specifiers.iter().flatten() {
+                let ImportDeclarationSpecifier::ImportSpecifier(specifier) = specifier else {
+                    continue;
+                };
+                if specifier.import_kind != ImportOrExportKind::Type {
+                    continue;
+                }
+                let text = self.text(specifier.span);
+                specifiers.push(
+                    text.trim_start()
+                        .strip_prefix("type ")
+                        .unwrap_or(text.trim())
+                        .trim()
+                        .to_string(),
+                );
+                specifier_lines.push(self.line(specifier.span.start));
+            }
+            if !specifiers.is_empty() {
+                self.analysis
+                    .inline_type_imports
+                    .push(InlineTypeImportFact {
+                        source: declaration.source.value.to_string(),
+                        specifiers,
+                        line: self.line(declaration.span.start),
+                        specifier_lines,
+                    });
+            }
+        }
+
         let local_names = declaration
             .specifiers
             .iter()
@@ -211,6 +283,7 @@ impl<'a> Visit<'a> for FactVisitor<'_, '_> {
 
     fn visit_call_expression(&mut self, call: &CallExpression<'a>) {
         let callee = self.text(call.callee.span());
+        let receiver = receiver_call_span(call).map(|span| (span.start, span.end));
         let arguments = call
             .arguments
             .iter()
@@ -230,8 +303,30 @@ impl<'a> Visit<'a> for FactVisitor<'_, '_> {
             arguments,
             text: self.text(call.span),
             line: self.line(call.span.start),
+            start: call.span.start,
+            end: call.span.end,
+            receiver,
         });
         walk::walk_call_expression(self, call);
+    }
+}
+
+fn receiver_call_span(call: &CallExpression<'_>) -> Option<Span> {
+    let member = call.callee.get_member_expr()?;
+    expression_call_span(member.object())
+}
+
+fn expression_call_span(expression: &Expression<'_>) -> Option<Span> {
+    match expression.get_inner_expression() {
+        Expression::CallExpression(call) => Some(call.span),
+        Expression::ChainExpression(chain) => match &chain.expression {
+            ChainElement::CallExpression(call) => Some(call.span),
+            ChainElement::TSNonNullExpression(non_null) => {
+                expression_call_span(&non_null.expression)
+            }
+            _ => None,
+        },
+        _ => None,
     }
 }
 
@@ -291,5 +386,53 @@ mod tests {
                 .iter()
                 .any(|fact| fact.callee == "fetch" && fact.arguments[0].contains("/api/v1"))
         );
+    }
+
+    #[test]
+    fn extracts_jsx_opening_elements_without_comments_strings_or_closing_tags() {
+        let facts = analyze_typescript(
+            "src/example.tsx",
+            r#"
+                // <button>not JSX</button>
+                const example = "<select>not JSX</select>";
+                export function Example() {
+                    return <form><button /><Select /><x-button /></form>;
+                }
+            "#,
+        );
+
+        assert!(facts.parse_errors.is_empty());
+        let mut names = facts
+            .jsx_elements
+            .iter()
+            .map(|element| element.name.as_str())
+            .collect::<Vec<_>>();
+        names.sort_unstable();
+        assert_eq!(names, ["Select", "button", "form", "x-button"]);
+    }
+
+    #[test]
+    fn extracts_inline_type_imports_from_mixed_multiline_imports() {
+        let facts = analyze_typescript(
+            "src/example.tsx",
+            r#"
+                import {
+                    type Credential,
+                    credentialLabels,
+                    type Location as WorkLocation,
+                } from "~/lib/application/application.schema";
+                import type { Employee, Shift } from "~/lib/staffing/staffing.schema";
+            "#,
+        );
+
+        assert!(facts.parse_errors.is_empty());
+        assert_eq!(facts.inline_type_imports.len(), 1);
+        let import = &facts.inline_type_imports[0];
+        assert_eq!(import.source, "~/lib/application/application.schema");
+        assert_eq!(
+            import.specifiers,
+            ["Credential", "Location as WorkLocation"]
+        );
+        assert_eq!(import.specifier_lines, [3, 5]);
     }
 }

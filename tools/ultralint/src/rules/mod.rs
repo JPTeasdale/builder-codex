@@ -26,6 +26,7 @@ mod runtime_safety;
 mod secrets;
 mod server_function_policy;
 mod server_layer_boundaries;
+mod shadcn_ui_primitives;
 mod source_integrity;
 mod sql_files;
 mod structure;
@@ -46,7 +47,7 @@ use crate::config::Config;
 use crate::fs::Project;
 use crate::suppression::SuppressionSet;
 
-pub const POLICY_VERSION: &str = "2026-07-15";
+pub const POLICY_VERSION: &str = "2026-10-16";
 
 pub trait Rule {
     fn id(&self) -> &'static str;
@@ -322,6 +323,7 @@ pub fn builtin_rules() -> Vec<Box<dyn Rule>> {
         Box::new(types::TypeContractsRule),
         Box::new(boundaries::ArchitectureBoundariesRule),
         Box::new(component_boundaries::ComponentBoundariesRule),
+        Box::new(shadcn_ui_primitives::ShadcnUiPrimitivesRule),
         Box::new(cloudflare_worker_env::CloudflareWorkerEnvRule),
         Box::new(cloudflare_ai_gateway::CloudflareAiGatewayBindingRule),
         Box::new(better_auth_imports::BetterAuthImportsRule),

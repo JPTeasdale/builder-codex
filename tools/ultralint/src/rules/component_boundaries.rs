@@ -1,6 +1,6 @@
 use crate::config::Config;
 use crate::fs::Project;
-use crate::rules::common::{has_prefix, is_ts_source_file, join};
+use crate::rules::common::{has_prefix, is_test_file, is_ts_source_file, join};
 use crate::rules::{Report, Rule};
 
 pub struct ComponentBoundariesRule;
@@ -23,6 +23,7 @@ impl Rule for ComponentBoundariesRule {
             if !is_ts_source_file(&file.rel_path) {
                 continue;
             }
+            let test_or_story = is_test_file(&file.rel_path) || is_storybook_file(&file.rel_path);
 
             if let Some(ts) = &file.ts {
                 for import in &ts.imports {
@@ -37,26 +38,27 @@ impl Rule for ComponentBoundariesRule {
 
                     if target.kind == PageImportKind::Entrypoint
                         && !is_route_file(&file.rel_path, config)
-                        && !is_storybook_file(&file.rel_path)
+                        && !test_or_story
                     {
                         report.error(
                             self.id(),
                             &file.rel_path,
                             Some(import.line),
                             "non-route code imports a page package entrypoint",
-                            "only src/routes and Storybook stories may import src/components/pages/<page>; move shared UI to components/blocks or components/ui.",
+                            "only src/routes, Storybook stories, and recognized test files may import src/components/pages/<page>; use stories for visual/interaction scenarios and tests for direct component behavior; move shared production UI to components/blocks or components/ui.",
                         );
                     }
 
                     if target.kind == PageImportKind::Internal
                         && !is_page_index_for(&file.rel_path, &target.page, config)
+                        && !test_or_story
                     {
                         report.error(
                             self.id(),
                             &file.rel_path,
                             Some(import.line),
                             "page internal component is imported outside its page index",
-                            "only src/components/pages/<page>/index.tsx may import support files from that page package. Import the page package entrypoint from routes or stories instead.",
+                            "only src/components/pages/<page>/index.tsx, Storybook stories, and recognized test files may import private page support components; use stories for visual/interaction scenarios and tests for direct component behavior.",
                         );
                     }
                 }
